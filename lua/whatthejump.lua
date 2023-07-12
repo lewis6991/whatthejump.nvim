@@ -112,11 +112,29 @@ end
 --- @param x Jump
 --- @return {[1]: string, [2]: string?}[]
 local function jump_to_virttext(x)
-  local bufname = vim.fn.fnamemodify(api.nvim_buf_get_name(x.bufnr), ':~:.')
+  local name --- @type {[1]: string, [2]: string?}
+  if x.filename then
+    name = { x.filename, 'Tag' }
+  elseif api.nvim_buf_is_valid(x.bufnr) then
+    name = { vim.fn.fnamemodify(api.nvim_buf_get_name(x.bufnr), ':~:.'), 'Tag' }
+  else
+    name = { 'invalid buf '..x.bufnr, 'ErrorMsg' }
+  end
+
+  local line --- @type {[1]: string, [2]: string?}?
+
+  if api.nvim_buf_is_loaded(x.bufnr) then
+    local text = api.nvim_buf_get_lines(x.bufnr, x.lnum - 1, x.lnum, false)[1]
+    if text then
+      text = '\t'..vim.trim(text)
+      line = { text, 'SpecialKey' }
+    end
+  end
 
   return {
-    { bufname },
+    name,
     { string.format(':%d:%d', x.lnum, x.col), 'Directory' },
+    line
   }
 end
 
@@ -130,8 +148,9 @@ local function virt_text_len(x)
   return len
 end
 
+local CONTEXT_MAX = 8
 local CONTEXT_BEFORE = 10
-local CONTEXT_AFTER = 3
+local CONTEXT_AFTER = 4
 
 --- @param jumplist Jump[]
 --- @param current integer
@@ -157,6 +176,9 @@ local function get_text(jumplist, current)
       lines[#lines+1] = jump_to_virttext(j)
       if current == i then
         current_lnum = #lines
+      end
+      if #lines > CONTEXT_MAX then
+        break
       end
     end
   end
