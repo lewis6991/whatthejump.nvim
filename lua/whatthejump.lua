@@ -1,4 +1,4 @@
-local api = vim.api
+local api, uv = vim.api, vim.loop
 
 --- @class Jump
 --- @field bufnr integer
@@ -76,7 +76,7 @@ local win_timer --- @type uv_timer_t?
 
 local function refresh_win_timer()
   if not win_timer then
-    win_timer = assert(vim.uv.new_timer())
+    win_timer = assert(uv.new_timer())
   end
 
   win_timer:start(WIN_TIMEOUT, 0, function()
