@@ -1,18 +1,11 @@
-local api, uv = vim.api, vim.loop
-
---- @class Jump
---- @field bufnr integer
---- @field col integer
---- @field coladd integer
---- @field lnum integer
---- @field filename? string
+local api = vim.api
 
 local ns = api.nvim_create_namespace('whatthejump')
 
 local gwin --- @type integer?
 
 -- Autocmd ID for cursor moved
-local cmoved_au ---@type integer?
+local cmoved_au --- @type integer?
 
 local function close_win()
   if not gwin then
@@ -23,12 +16,12 @@ local function close_win()
 end
 
 local function enable_cmoved_au()
-  cmoved_au = api.nvim_create_autocmd({'CursorMoved', 'CursorMovedI'}, {
+  cmoved_au = api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI' }, {
     once = true,
     callback = function()
       close_win()
       cmoved_au = nil
-    end
+    end,
   })
 end
 
@@ -57,7 +50,7 @@ local function refresh_win(height, width)
 
   gwin = api.nvim_open_win(buf, false, {
     relative = 'win',
-    anchor = 'ne',
+    anchor = 'NE',
     col = api.nvim_win_get_width(0),
     row = 0,
     zindex = 200,
@@ -72,12 +65,10 @@ end
 
 local WIN_TIMEOUT = 2000
 
-local win_timer --- @type uv_timer_t?
+local win_timer --- @type uv.uv_timer_t?
 
 local function refresh_win_timer()
-  if not win_timer then
-    win_timer = assert(uv.new_timer())
-  end
+  win_timer = win_timer or assert(vim.uv.new_timer())
 
   win_timer:start(WIN_TIMEOUT, 0, function()
     win_timer:close()
@@ -86,12 +77,12 @@ local function refresh_win_timer()
   end)
 end
 
----@param buf integer
----@param lines string[]
----@param current_line integer
+--- @param buf integer
+--- @param lines [string,string?][][]
+--- @param current_line integer
 local function render_buf(buf, lines, current_line)
   if api.nvim_buf_line_count(buf) < #lines then
-    local blank = {} ---@type string[]
+    local blank = {} --- @type string[]
     for i = 1, #lines do
       blank[i] = ''
     end
@@ -101,7 +92,7 @@ local function render_buf(buf, lines, current_line)
 
   api.nvim_buf_clear_namespace(buf, ns, 0, -1)
   for i, l in ipairs(lines) do
-    api.nvim_buf_set_extmark(buf, ns, i-1, 0, {
+    api.nvim_buf_set_extmark(buf, ns, i - 1, 0, {
       virt_text = l,
       hl_mode = 'combine',
       line_hl_group = i == current_line and 'Visual' or nil,
@@ -109,24 +100,24 @@ local function render_buf(buf, lines, current_line)
   end
 end
 
---- @param x Jump
---- @return {[1]: string, [2]: string?}[]
+--- @param x vim.fn.getjumplist.ret.item
+--- @return [string, string?][]
 local function jump_to_virttext(x)
-  local name --- @type {[1]: string, [2]: string?}
+  local name --- @type [string, string?]
   if x.filename then
     name = { x.filename, 'Tag' }
   elseif api.nvim_buf_is_valid(x.bufnr) then
     name = { vim.fn.fnamemodify(api.nvim_buf_get_name(x.bufnr), ':~:.'), 'Tag' }
   else
-    name = { 'invalid buf '..x.bufnr, 'ErrorMsg' }
+    name = { 'invalid buf ' .. x.bufnr, 'ErrorMsg' }
   end
 
-  local line --- @type {[1]: string, [2]: string?}?
+  local line --- @type [string, string?]?
 
   if api.nvim_buf_is_loaded(x.bufnr) then
     local text = api.nvim_buf_get_lines(x.bufnr, x.lnum - 1, x.lnum, false)[1]
     if text then
-      text = '\t'..vim.trim(text)
+      text = '\t' .. vim.trim(text)
       line = { text, 'SpecialKey' }
     end
   end
@@ -134,11 +125,11 @@ local function jump_to_virttext(x)
   return {
     name,
     { string.format(':%d:%d', x.lnum, x.col), 'Directory' },
-    line
+    line,
   }
 end
 
---- @param x {[1]: string, [2]: string?}[]
+--- @param x [string, string?][]
 --- @return integer
 local function virt_text_len(x)
   local len = 0
@@ -152,14 +143,14 @@ local CONTEXT_MAX = 8
 local CONTEXT_BEFORE = 10
 local CONTEXT_AFTER = 4
 
---- @param jumplist Jump[]
+--- @param jumplist vim.fn.getjumplist.ret.item[]
 --- @param current integer
---- @return string[] lines
+--- @return [string,string?][][] lines
 --- @return integer current_line
 --- @return integer width
 local function get_text(jumplist, current)
   local width = 0
-  local lines = {} --- @type table[]
+  local lines = {} --- @type [string,string?][][]
   local current_lnum --- @type integer
 
   -- Determine the longest required width from the full jumplist
@@ -173,7 +164,7 @@ local function get_text(jumplist, current)
   for i = current - CONTEXT_AFTER, current + CONTEXT_BEFORE do
     local j = jumplist[i]
     if j then
-      lines[#lines+1] = jump_to_virttext(j)
+      lines[#lines + 1] = jump_to_virttext(j)
       if current == i then
         current_lnum = #lines
       end
@@ -192,7 +183,6 @@ local M = {}
 function M.show_jumps(forward)
   disable_cmoved_au()
 
-  --- @type Jump[], integer
   local jumplist, last_jump_pos = unpack(vim.fn.getjumplist())
   local target = last_jump_pos + 1 + (forward and 1 or -1)
 
@@ -202,7 +192,7 @@ function M.show_jumps(forward)
   local lines, current_line, width = get_text(jumplist, target)
 
   vim.schedule(function()
-    local win = refresh_win(#lines, width+2)
+    local win = refresh_win(#lines, width + 2)
     local buf = api.nvim_win_get_buf(win)
     render_buf(buf, lines, current_line)
     refresh_win_timer()
